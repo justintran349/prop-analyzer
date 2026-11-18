@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.streamlit/secrets.toml
+.DS_Store
+.pytest_cache/
+# raw page cache (re-downloadable)
+data/cache/
+data/nfl/
+data/daily.log
+# keep data/*.csv and models/ so a deployed copy of the app has data
+data/nfl_props/raw/
+
+# personal settings
+data/line_settings.json
+data/tracker*.csv

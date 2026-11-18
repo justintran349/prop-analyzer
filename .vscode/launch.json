@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dashboard (Streamlit)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": [
+        "run",
+        "app.py"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Daily job",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/daily.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Update data",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/update_data.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Train models",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/train_model.py",
+      "console": "integratedTerminal"
+    }
+  ]
+}
