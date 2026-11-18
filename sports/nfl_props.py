@@ -170,8 +170,13 @@ with t_player:
             h["label"] = h["season"].astype(str).str[-2:] + " W" + h["week"].astype(str) + " " + h["opp"]
             h["result"] = (h[stat] > line).map({True: "Over", False: "Under"})
             h["conditions"] = h.apply(lambda x: nw.describe(x), axis=1)
-            fig = px.bar(h, x="label", y=stat, color="result", hover_data=["conditions"],
+            from props.onoff import teammates_out
+            h["out"] = teammates_out("NFL", h)
+            fig = px.bar(h, x="label", y=stat, color="result", custom_data=["conditions", "out"],
+                         category_orders={"label": h["label"].tolist()},
                          color_discrete_map={"Over": "#2e9e5b", "Under": "#c8553d"}, labels={"label": "", stat: LABEL(stat)})
+            fig.update_traces(hovertemplate=f"<b>%{{x}}</b><br>{LABEL(stat)}: %{{y}}<br>%{{customdata[0]}}"
+                                            "<br><br><b>Teammates out:</b><br>%{customdata[1]}<extra></extra>")
             fig.add_hline(y=line, line_dash="dash", annotation_text=f"Line {line}")
             fig.update_layout(height=330, margin=dict(t=20, b=10), legend_title_text="")
             st.plotly_chart(fig, width="stretch")

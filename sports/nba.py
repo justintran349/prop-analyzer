@@ -243,9 +243,14 @@ with tab_player:
         g = rep["games"].tail(25).copy()
         g["label"] = g["date"].dt.strftime("%m/%d") + " " + g["home"].map({1: "vs", 0: "@"}) + " " + g["opp"]
         g["result"] = (g[stat] > line).map({True: "Over", False: "Under"})
-        fig = px.bar(g, x="label", y=stat, color="result",
+        from props.onoff import teammates_out
+        g["out"] = teammates_out("NBA", g.assign(player_id=pid) if "player_id" not in g else g)
+        fig = px.bar(g, x="label", y=stat, color="result", custom_data=["min", "out"],
                      color_discrete_map={"Over": "#2e9e5b", "Under": "#c8553d"},
-                     labels={"label": "", stat: STAT_LABEL(stat)}, hover_data=["min"])
+                     category_orders={"label": g["label"].tolist()},
+                     labels={"label": "", stat: STAT_LABEL(stat)})
+        fig.update_traces(hovertemplate=f"<b>%{{x}}</b><br>{STAT_LABEL(stat)}: %{{y}} in %{{customdata[0]}} min"
+                                        "<br><br><b>Teammates out:</b><br>%{customdata[1]}<extra></extra>")
         fig.add_hline(y=line, line_dash="dash", annotation_text=f"Line {line}")
         fig.update_layout(height=340, margin=dict(t=20, b=10), legend_title_text="")
         st.plotly_chart(fig, width="stretch")

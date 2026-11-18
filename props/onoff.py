@@ -173,3 +173,69 @@ def explain(info: dict, stat_label: str, player: str, p_before, p_after) -> str:
             f"{info['boost']:.2f} = **{info['target']:.1f}**. The difference, "
             f"{info['target'] - info['model_proj']:+.1f}, against his usual "
             f"game-to-game swing of ±{info['sd']:.1f}, moves the chance of the over from {pb} to **{pa}**.")
+
+
+# ---------------------------------------------------- who was out, game by game
+def _absences(logs: pd.DataFrame, team: str, season, weight: str, min_games: int, min_weight: float,
+              names: dict, fmt) -> dict:
+    """{date: ["Austin Reaves (34 mpg)", ...]} for key players on `team` who missed that game."""
+    t = logs[(logs["team"] == team) & (logs["season"] == season)]
+    if t.empty:
+        return {}
+    dates = sorted(t["date"].unique())
+    last_team = (logs[logs["season"] == season].sort_values("date")
+                 .groupby("player_id")["team"].last())
+    prev = logs[logs["season"] == season - 1]
+    prev_max = prev.groupby("player_id").size().max() if not prev.empty else 0
+    prev_stats = prev.groupby("player_id").agg(n=(weight, "size"), w=(weight, "mean"))
+    out: dict = {d: [] for d in dates}
+    for pid, g in t.groupby("player_id"):
+        avg = g[weight].mean()
+        if not (avg >= min_weight):
+            continue
+        # key = a regular this season, or a regular last season (hurt for most of this one).
+        # Skips backups who only played while the starter was out.
+        regular_now = len(g) >= max(min_games, 0.5 * len(dates))
+        ps = prev_stats.loc[pid] if pid in prev_stats.index else None
+        regular_before = (ps is not None and bool(prev_max) and ps["n"] >= 0.35 * prev_max
+                          and ps["w"] >= min_weight)
+        if not (regular_now or regular_before):
+            continue
+        first, last = g["date"].min(), g["date"].max()
+        still = last_team.get(pid) == team
+        played = set(g["date"])
+        for d in dates:
+            if d >= first and (still or d <= last) and d not in played:
+                out[d].append((avg, fmt(names.get(pid, str(pid)), avg, g)))
+    return {d: [s for _, s in sorted(v, key=lambda x: -x[0])] for d, v in out.items()}
+
+
+def teammates_out(sport: str, games: pd.DataFrame, top: int = 5) -> pd.Series:
+    """For each row of a player's game log: the key teammates who didn't play, as hover text."""
+    if games.empty:
+        return pd.Series(dtype=str)
+    if sport == "NBA":
+        from .analysis import load_data
+        logs, players = load_data()
+        names = players.drop_duplicates("player_id", keep="last").set_index("player_id")["player"].to_dict()
+        kw = dict(weight="min", min_games=ROTATION_MIN_GAMES, min_weight=20.0,
+                  fmt=lambda n, a, g: f"{n} ({a:.0f} mpg)")
+    else:
+        from . import nfl_data as nd
+        _, logs, _ = nd.load()
+        logs = logs.copy()
+        logs["date"] = pd.to_datetime(logs["date"])
+        names = logs.drop_duplicates("player_id", keep="last").set_index("player_id")["player"].to_dict()
+        kw = dict(weight="offense_pct", min_games=3, min_weight=0.55,
+                  fmt=lambda n, a, g: f"{n} ({g['position'].iloc[-1]}, {a:.0%} of snaps)")
+    me = games["player_id"].iloc[-1] if "player_id" in games else None
+    cache: dict = {}
+    texts = []
+    for _, r in games.iterrows():
+        key = (r["team"], r["season"])
+        if key not in cache:
+            cache[key] = _absences(logs, r["team"], r["season"], names=names, **kw)
+        miss = [s for s in cache[key].get(pd.Timestamp(r["date"]), []) if names.get(me, "") not in s]
+        texts.append("<br>".join(miss[:top]) + (f"<br>+{len(miss) - top} more" if len(miss) > top else "")
+                     if miss else "none")
+    return pd.Series(texts, index=games.index)

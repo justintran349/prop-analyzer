@@ -145,9 +145,14 @@ def _hit_rate_section(r: dict, opp: str):
     last = g.tail(15).copy()
     hit = (last[r["stat"]] > r["line"]) if r["pick"] == "OVER" else (last[r["stat"]] < r["line"])
     last["result"] = hit.map({True: "Hit", False: "Miss"})
-    fig = px.bar(last, x="label", y=r["stat"], color="result",
+    from props.onoff import teammates_out
+    last["out"] = teammates_out(r["sport"], last)
+    fig = px.bar(last, x="label", y=r["stat"], color="result", custom_data=["out", "date"],
                  color_discrete_map={"Hit": "#2e9e5b", "Miss": "#c8553d"},
-                 labels={"label": "", r["stat"]: r["stat_label"]}, title="Last 15 games")
+                 category_orders={"label": last["label"].tolist()},
+                 labels={"label": "", r["stat"]: r["stat_label"]}, title="Last 15 games (hover for who was out)")
+    fig.update_traces(hovertemplate=f"<b>%{{x}}</b><br>{r['stat_label']}: %{{y}}"
+                                    "<br><br><b>Teammates out:</b><br>%{customdata[0]}<extra></extra>")
     fig.add_hline(y=r["line"], line_dash="dash", annotation_text=f"Line {r['line']:g}")
     fig.update_layout(height=320, margin=dict(t=40, b=10), legend_title_text="")
     st.plotly_chart(fig, width="stretch")
