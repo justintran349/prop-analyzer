@@ -98,13 +98,14 @@ def track_button(rows: pd.DataFrame, key: str, label="Track selected picks"):
         st.success(f"Tracked {added} pick(s). See the Tracker tab.")
 
 
-tabs = st.tabs(["Tonight", "Player analyzer", "Props board", "Defense vs position",
-                "Matchups", "Tracker", "Model"])
-tab_tonight, tab_player, tab_board, tab_dvp, tab_match, tab_track, tab_model = tabs
+VIEWS = ['Tonight', 'Player analyzer', 'Props board', 'Defense vs position', 'Matchups', 'Tracker', 'Model']
+# a keyed selector (not st.tabs) so picking a player or changing a filter keeps you on the same tab
+view = st.segmented_control("Section", VIEWS, default=VIEWS[0], key="nba_view",
+                            label_visibility="collapsed") or VIEWS[0]
 
 
 # --------------------------------------------------------------- tonight
-with tab_tonight:
+if view == 'Tonight':
     day = st.date_input("Date", pd.Timestamp.today().date(), key="slate_day")
     games = slate.todays_games(lg, day)
     if games.empty:
@@ -170,7 +171,7 @@ with tab_tonight:
 
 
 # ------------------------------------------------------- player analyzer
-with tab_player:
+if view == 'Player analyzer':
     c1, c2, c3 = st.columns([2, 1, 1])
     player = c1.selectbox("Player", sorted(lg.name_to_id), index=None, placeholder="Type a name...")
     stat = c2.selectbox("Stat", list(config.STATS), format_func=STAT_LABEL)
@@ -285,7 +286,7 @@ with tab_player:
 
 
 # ------------------------------------------------------------ props board
-with tab_board:
+if view == 'Props board':
     st.write("Lines from `data/lines.csv`, the last Odds API pull, and live pulls. "
              "**Edge** = model chance minus the chance the odds imply.")
     b1, _ = st.columns(2)
@@ -367,7 +368,7 @@ with tab_board:
 
 
 # ---------------------------------------------------- defense vs position
-with tab_dvp:
+if view == 'Defense vs position':
     d1, d2 = st.columns(2)
     s = d1.selectbox("Stat ", list(config.STATS), format_func=STAT_LABEL, key="dvp_stat")
     window = d2.radio("Window", ["Full season", "Last 15 games"], horizontal=True)
@@ -384,7 +385,7 @@ with tab_dvp:
 
 
 # --------------------------------------------------------------- matchups
-with tab_match:
+if view == 'Matchups':
     st.caption("Who guards a player, from NBA.com tracking data. Results are cached for a day "
                "in data/matchups.csv. NBA.com is sometimes slow or blocks requests.")
     m1, m2 = st.columns(2)
@@ -406,7 +407,7 @@ with tab_match:
 
 
 # ---------------------------------------------------------------- tracker
-with tab_track:
+if view == 'Tracker':
     t1, t2 = st.columns([1, 3])
     if t1.button("Grade picks now"):
         n = tracker.grade(logs)
@@ -467,7 +468,7 @@ with tab_track:
 
 
 # ------------------------------------------------------------------ model
-with tab_model:
+if view == 'Model':
     st.write("One model per stat plus a minutes model. Each is tested on the most recent games "
              "it never saw. At -110 odds you need to win **52.4%** to break even.")
     mm = model.load_metrics("minutes")

@@ -52,13 +52,14 @@ with st.sidebar:
         st.rerun()
     st.caption("Refresh stats, injuries & weather: `python scripts/update_nfl_data.py`")
 
-tabs = st.tabs(["This week", "Player analyzer", "Props board", "Weather impact",
-                "Defense vs position", "Model"])
-t_week, t_player, t_board, t_wx, t_dvp, t_model = tabs
+VIEWS = ['This week', 'Player analyzer', 'Props board', 'Weather impact', 'Defense vs position', 'Model']
+# a keyed selector (not st.tabs) so picking a player or changing a filter keeps you on the same tab
+view = st.segmented_control("Section", VIEWS, default=VIEWS[0], key="nfl_view",
+                            label_visibility="collapsed") or VIEWS[0]
 
 
 # ------------------------------------------------------------- this week
-with t_week:
+if view == 'This week':
     if week.empty:
         st.info("No upcoming games found (off-season?).")
     else:
@@ -97,7 +98,7 @@ with t_week:
 
 
 # -------------------------------------------------------- player analyzer
-with t_player:
+if view == 'Player analyzer':
     c1, c2, c3 = st.columns([2, 1, 1])
     player = c1.selectbox("Player", sorted(lg.name_to_id), index=None, placeholder="Type a name...", key="nfl_p")
     stat = c2.selectbox("Stat", list(nd.STATS), format_func=LABEL, key="nfl_s")
@@ -194,7 +195,7 @@ with t_player:
 
 
 # -------------------------------------------------------------- props board
-with t_board:
+if view == 'Props board':
     st.write("Lines from `data/nfl_props/lines.csv` and the last Odds API pull, scored by the model. "
              "**Edge** = model chance minus the chance the odds imply.")
     if odds.odds_api_available():
@@ -236,7 +237,7 @@ with t_board:
 
 
 # ----------------------------------------------------------- weather impact
-with t_wx:
+if view == 'Weather impact':
     st.write("How each stat changes with conditions, across every game since 2023 "
              "(players who played at least half the snaps). The model uses temperature, wind, gusts, "
              "rain, snow, indoors and turf directly, so these effects are part of every prediction.")
@@ -254,7 +255,7 @@ with t_wx:
 
 
 # ------------------------------------------------------- defense vs position
-with t_dvp:
+if view == 'Defense vs position':
     s = st.selectbox("Stat ", list(nd.STATS), format_func=LABEL, key="nfl_dvp")
     season = int(pg["season"].max())
     cur = pg[(pg["season"] == season)]
@@ -269,7 +270,7 @@ with t_dvp:
 
 
 # ------------------------------------------------------------------- model
-with t_model:
+if view == 'Model':
     st.write("One model per stat, tested on the most recent games it never saw. "
              "At -110 you need **52.4%** to break even.")
     rows = []
