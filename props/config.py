@@ -19,7 +19,9 @@ for _d in (DATA_DIR, CACHE_DIR, MODELS_DIR):
 # Basketball-Reference names a season by the year it ENDS: 2026-27 season -> 2027
 SEASON = int(os.getenv("NBA_SEASON", "2027"))
 # Extra past seasons to pull for model training (more data = better model)
-TRAINING_SEASONS = [SEASON - 1, SEASON]
+# Seasons of game logs to download and train on (default: last 5, i.e. 2022-23 to now).
+HISTORY_SEASONS = int(os.getenv("NBA_HISTORY_SEASONS", "5"))
+TRAINING_SEASONS = list(range(SEASON - HISTORY_SEASONS + 1, SEASON + 1))
 
 BREF_BASE = "https://www.basketball-reference.com"
 # Basketball-Reference bans IPs that make more than ~20 requests/minute.
