@@ -239,6 +239,11 @@ def build(log=print) -> pd.DataFrame:
     if not df.empty:
         df["generated_at"] = pd.Timestamp.now().floor("min")
         df.to_csv(CACHE, index=False)
+        try:                                   # keep a history for the Results page
+            from . import history
+            history.log_picks(df)
+        except Exception as e:
+            log(f"Couldn't log picks to history: {e}")
     return df
 
 

@@ -150,6 +150,13 @@ def main():
             alerts.send("📉 Line moves", moves)
         print("sent")
 
+    step("Grade pick history")
+    try:
+        from props import history
+        print(f"{history.grade_history()} logged Top Picks graded (see the Results page)")
+    except Exception as e:
+        print(f"History grading failed: {e}")
+
     step("Top picks")
     try:
         from props import top_picks
@@ -161,6 +168,7 @@ def main():
     if args.retrain or today.dayofweek == 0:
         step("Retraining models")
         subprocess.run([sys.executable, str(ROOT / "scripts" / "train_model.py")], check=False)
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "backtest.py")], check=False)
     print("\nDone.")
 
 

@@ -372,3 +372,25 @@ def test_with_without_split():
     assert s["without"]["n"] == 3 and s["without"]["min"] == 32 and s["with"]["min"] == 22
     assert abs(s["weight"] - 3 / 7) < 1e-9
     assert s["without"]["rate"] > s["with"]["rate"]
+
+
+def test_history_log_grade_and_summaries(tmp_path, monkeypatch):
+    from props import history as h
+    monkeypatch.setattr(h, "HISTORY_CSV", tmp_path / "hist.csv")
+    picks = pd.DataFrame({
+        "date": ["2026-11-10"] * 3, "sport": "NBA", "player": ["A", "B", "C"], "player_id": ["a", "b", "c"],
+        "stat": "pts", "stat_label": "Points", "line": [20.5, 10.5, 5.5], "line_type": "estimated",
+        "pick": ["OVER", "UNDER", "OVER"], "prob_over": [0.7, 0.3, 0.65], "confidence": [0.7, 0.7, 0.65],
+        "over_odds": np.nan, "under_odds": np.nan})
+    assert h.log_picks(picks) == 3
+    picks2 = picks.assign(line=[21.5, 10.5, 5.5])          # a later run: newest version replaces
+    h.log_picks(picks2)
+    d = h._read(h.HISTORY_CSV)
+    assert len(d) == 3 and d.loc[d["player"] == "A", "line"].iloc[0] == 21.5
+    d["result"] = ["win", "loss", "win"]
+    d["profit"] = [100 / 110, -1, 100 / 110]
+    r = h.record(d)
+    assert (r["wins"], r["losses"]) == (2, 1) and abs(r["hit_rate"] - 2 / 3) < 1e-9
+    assert h.by_period(d, "W")["picks"].iloc[0] == 3
+    assert h.wilson_low(30, 40) > h.wilson_low(5, 5)       # long record beats a lucky short one
+    assert len(h.top_per_day(d, 2)) == 2
