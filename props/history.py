@@ -151,7 +151,7 @@ def load_all(sources=("live", "backtest", "tracked")) -> pd.DataFrame:
         return _blank(pd.DataFrame())
     df = pd.concat(frames, ignore_index=True)
     df["date"] = pd.to_datetime(df["date"]).dt.normalize()
-    return df
+    return df[(df["sport"] != "NBA") | df["stat"].isin(list(config.STATS))]   # only stats still offered
 
 
 # ----------------------------------------------------------------- backtest
@@ -185,7 +185,9 @@ def backtest_nba(start: str | None = None, log=print) -> pd.DataFrame:
     pred_min = mins[["player_id", "date"]].assign(pred_min=reg.predict(mins[model.MIN_FEATURES]))
 
     out = []
-    for stat in config.STATS:
+    for stat in config.ready_stats():
+        if stat not in logs:
+            continue
         log(f"  {config.STATS[stat]} ...")
         f = model.build_features(logs, stat, None, ctx)
         f = f.drop(columns="pred_min").merge(pred_min, on=["player_id", "date"], how="left")

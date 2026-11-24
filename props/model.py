@@ -390,6 +390,11 @@ def train(logs: pd.DataFrame, stat: str, lines: pd.DataFrame | None = None,
 def train_all(logs: pd.DataFrame, stats=None, lines=None, log=print) -> dict:
     """Minutes model first, then one over/under model per stat."""
     stats = stats or list(config.STATS)
+    missing = [s for s in stats if s not in logs]
+    if missing:
+        log("Skipping " + ", ".join(config.STATS.get(s, s) for s in missing)
+            + ": not in the game logs yet. Run `python scripts/update_data.py`, then train again.")
+        stats = [s for s in stats if s in logs]
     ctx = Context(logs)
     log("Training minutes model ...")
     base = build_features(logs, "pts", lines, ctx)

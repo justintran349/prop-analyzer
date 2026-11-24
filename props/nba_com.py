@@ -16,10 +16,13 @@ from .teams import to_code
 
 
 def add_combos(df: pd.DataFrame) -> pd.DataFrame:
-    """Add combo stats (pra, pr, pa, ra, stocks) in place."""
+    """Add combo stats (pra, pr, pa, ra) and 2-pointers (fg2m, fg2a) in place."""
     for name, parts in config.COMBOS.items():
         if all(p in df for p in parts):
             df[name] = df[parts].sum(axis=1, min_count=len(parts))
+    for name, (total, threes) in config.DIFFS.items():
+        if total in df and threes in df:
+            df[name] = df[total] - df[threes]
     return df
 
 
@@ -101,8 +104,10 @@ def convert(raw: pd.DataFrame, bref_players: pd.DataFrame) -> tuple[pd.DataFrame
         "pts": pd.to_numeric(raw["PTS"], errors="coerce"),
         "trb": pd.to_numeric(raw["REB"], errors="coerce"),
         "ast": pd.to_numeric(raw["AST"], errors="coerce"),
-        "fg3": pd.to_numeric(raw["FG3M"], errors="coerce"),
+        "fgm": pd.to_numeric(raw["FGM"], errors="coerce"),
         "fga": pd.to_numeric(raw["FGA"], errors="coerce"),
+        "fg3": pd.to_numeric(raw["FG3M"], errors="coerce"),
+        "fg3a": pd.to_numeric(raw["FG3A"], errors="coerce"),
         "stl": pd.to_numeric(raw["STL"], errors="coerce"),
         "blk": pd.to_numeric(raw["BLK"], errors="coerce"),
         "tov": pd.to_numeric(raw["TOV"], errors="coerce"),

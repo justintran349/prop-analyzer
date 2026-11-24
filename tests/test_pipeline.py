@@ -394,3 +394,13 @@ def test_history_log_grade_and_summaries(tmp_path, monkeypatch):
     assert h.by_period(d, "W")["picks"].iloc[0] == 3
     assert h.wilson_low(30, 40) > h.wilson_low(5, 5)       # long record beats a lucky short one
     assert len(h.top_per_day(d, 2)) == 2
+
+
+def test_two_pointers_derived_and_stat_list():
+    from props import config
+    from props.nba_com import add_combos
+    df = pd.DataFrame({"pts": [20], "trb": [5], "ast": [4], "fgm": [8], "fga": [15], "fg3": [2], "fg3a": [6]})
+    add_combos(df)
+    assert df.loc[0, "fg2m"] == 6 and df.loc[0, "fg2a"] == 9 and df.loc[0, "pra"] == 29
+    assert set(config.STATS) == {"pts", "trb", "ast", "pra", "pr", "pa", "ra", "fg2m", "fg2a", "fg3", "fg3a"}
+    assert not {"stl", "blk", "stocks", "tov"} & set(config.ODDS_MARKETS.values())

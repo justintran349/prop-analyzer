@@ -98,6 +98,15 @@ def track_button(rows: pd.DataFrame, key: str, label="Track selected picks"):
         st.success(f"Tracked {added} pick(s). See the Tracker tab.")
 
 
+DATA_STATS = [s for s in config.STATS if s in lg.logs]      # in the game logs
+MODEL_STATS = [s for s in config.ready_stats() if s in lg.logs]   # model trained too
+if len(DATA_STATS) < len(config.STATS):
+    st.info("2-pointer and 3-point-attempt stats need fresh game logs: run `python scripts/update_data.py` "
+            "then `python scripts/train_model.py` in the VS Code terminal.")
+elif len(MODEL_STATS) < len(DATA_STATS):
+    st.info("Some stats don't have a trained model yet (" + ", ".join(
+        config.STATS[s] for s in DATA_STATS if s not in MODEL_STATS) + "). Run `python scripts/train_model.py`.")
+
 VIEWS = ['Tonight', 'Player analyzer', 'Props board', 'Defense vs position', 'Matchups', 'Tracker', 'Model']
 # a keyed selector (not st.tabs) so picking a player or changing a filter keeps you on the same tab
 view = st.segmented_control("Section", VIEWS, default=VIEWS[0], key="nba_view",
@@ -155,7 +164,7 @@ if view == 'Tonight':
                              hide_index=True, width="stretch",
                              column_config={"prob_pick": PCT, "edge": PCT, "proj": ONE, "pred_min": ONE})
         st.subheader("Model projections (no lines needed)")
-        pstats = st.multiselect("Stats", list(config.STATS), ["pts", "trb", "ast"],
+        pstats = st.multiselect("Stats", MODEL_STATS, ["pts", "trb", "ast"],
                                 format_func=STAT_LABEL, key="proj_stats")
         if st.button("Project every rotation player in these games"):
             st.session_state["proj"] = projections(lg, games, tuple(pstats), data_key + str(day))
@@ -174,7 +183,7 @@ if view == 'Tonight':
 if view == 'Player analyzer':
     c1, c2, c3 = st.columns([2, 1, 1])
     player = c1.selectbox("Player", sorted(lg.name_to_id), index=None, placeholder="Type a name...")
-    stat = c2.selectbox("Stat", list(config.STATS), format_func=STAT_LABEL)
+    stat = c2.selectbox("Stat", DATA_STATS, format_func=STAT_LABEL)
     line = c3.number_input("Line", min_value=0.0, value=20.5, step=0.5)
 
     if player:
@@ -370,7 +379,7 @@ if view == 'Props board':
 # ---------------------------------------------------- defense vs position
 if view == 'Defense vs position':
     d1, d2 = st.columns(2)
-    s = d1.selectbox("Stat ", list(config.STATS), format_func=STAT_LABEL, key="dvp_stat")
+    s = d1.selectbox("Stat ", DATA_STATS, format_func=STAT_LABEL, key="dvp_stat")
     window = d2.radio("Window", ["Full season", "Last 15 games"], horizontal=True)
     src = lg.dvp if window == "Full season" else lg.dvp_recent
     d = src[src["stat"] == s].pivot(index="opp", columns="pos", values="factor")

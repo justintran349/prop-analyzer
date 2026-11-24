@@ -67,7 +67,7 @@ def build_nba(stats=None, log=print) -> pd.DataFrame:
     if day is None:
         return pd.DataFrame()
     games = slate.todays_games(lg, day)
-    stats = stats or list(config.STATS)
+    stats = stats or config.ready_stats()          # stats whose model has been trained
     log(f"NBA: {len(games)} games on {day:%a %b %d}, {len(stats)} stats")
     proj = slate.projections_for_games(lg, games, tuple(stats))
     if proj.empty:
@@ -176,14 +176,14 @@ def build_nfl(stats=None, log=print) -> pd.DataFrame:
 MIN_LINE = {
     ("NBA", "pts"): 9.5, ("NBA", "trb"): 3.5, ("NBA", "ast"): 2.5, ("NBA", "fg3"): 1.5,
     ("NBA", "pra"): 14.5, ("NBA", "pr"): 11.5, ("NBA", "pa"): 11.5, ("NBA", "ra"): 5.5,
-    ("NBA", "stl"): 0.5, ("NBA", "blk"): 0.5, ("NBA", "stocks"): 1.5, ("NBA", "tov"): 1.5,
+    ("NBA", "fg2m"): 2.5, ("NBA", "fg2a"): 5.5, ("NBA", "fg3a"): 3.5,
     ("NFL", "passing_yards"): 160.5, ("NFL", "completions"): 14.5, ("NFL", "attempts"): 22.5,
     ("NFL", "passing_tds"): 0.5, ("NFL", "passing_interceptions"): 0.5,
     ("NFL", "rushing_yards"): 14.5, ("NFL", "carries"): 5.5, ("NFL", "receiving_yards"): 14.5,
     ("NFL", "receptions"): 1.5, ("NFL", "rush_rec_yds"): 19.5,
 }
 MAX_LINE = {("NFL", "passing_interceptions"): 0.5, ("NFL", "passing_tds"): 2.5}
-MIN_AVG_FOR_HALF = {"stl": 0.9, "blk": 0.9, "passing_tds": 1.0, "passing_interceptions": 0.5}
+MIN_AVG_FOR_HALF = {"passing_tds": 1.0, "passing_interceptions": 0.5}
 
 
 def realistic(df: pd.DataFrame) -> pd.Series:
@@ -267,6 +267,7 @@ def load_cached() -> tuple[pd.DataFrame, bool]:
     df = pd.read_csv(CACHE, parse_dates=["date", "generated_at"])
     if df.empty:
         return df, False
+    df = df[(df["sport"] != "NBA") | df["stat"].isin(list(config.STATS))].reset_index(drop=True)
     built = df["generated_at"].max()
     age_h = (pd.Timestamp.now() - built).total_seconds() / 3600
     changed = pd.Timestamp.fromtimestamp(data_mtime())   # local time, like generated_at
