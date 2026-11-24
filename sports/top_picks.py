@@ -107,6 +107,12 @@ def show_hit_rates(r: dict):
             tp.clear_my_line(orig)
             rebuild()
             st.rerun()
+    if st.button(f"🚫 Not offered at my book: remove {orig['player']} {orig['stat_label']}",
+                 key=f"remove|{base_key}",
+                 help="Hides this pick from Top Picks for this game and stops tracking it on the Results "
+                      "page. You can restore it from 'Removed picks' on the Top Picks page."):
+        tp.remove_pick({**orig, "date": orig["date"]})
+        st.rerun()
     side = "⬆️ OVER" if r["pick"] == "OVER" else "⬇️ UNDER"
     st.markdown(f"### {r['player']} · {side} {r['line']:g} {r['stat_label']}")
     st.caption(f"{r['team']} {r['game']} · model confidence {r['confidence']:.0%}"
@@ -296,6 +302,23 @@ def player_search(df: pd.DataFrame):
                "NFL Props page.")
 
 
+def removed_list():
+    gone = tp.removed_picks()
+    if gone.empty:
+        return
+    from props import config
+    from props.nfl_data import LABEL as NFL_LABEL
+    with st.expander(f"🚫 Removed picks ({len(gone)}): props not offered at your book"):
+        for i, g in enumerate(gone.itertuples()):
+            c1, c2 = st.columns([4, 1])
+            c1.write(f"{g.player} · {config.STATS.get(g.stat) or NFL_LABEL.get(g.stat, g.stat)} · "
+                     f"{g.date:%a %b %d} ({g.sport})")
+            if c2.button("Restore", key=f"restore|{i}|{g.player}|{g.stat}"):
+                tp.restore_pick({"date": g.date, "sport": g.sport, "player": g.player, "stat": g.stat})
+                rebuild()
+                st.rerun()
+
+
 @st.fragment(run_every="15m")
 def picks_view():
     df, fresh = tp.load_cached()
@@ -313,6 +336,7 @@ def picks_view():
     top_bar[0].caption(f"Updated {df['generated_at'].max():%a %b %d, %I:%M %p} · refreshes automatically")
 
     player_search(df)
+    removed_list()
 
     with st.expander("Filters", expanded=False):
         f = st.columns(4)

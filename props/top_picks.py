@@ -417,7 +417,8 @@ def rescore_pick(sport: str, league, r: dict, line: float, over_odds=None, under
 
 # --------------------------------------------------- your own lines (tracked)
 MY_LINES_CSV = config.DATA_DIR / "my_lines.csv"
-MY_COLS = ["date", "sport", "player", "player_id", "stat", "line", "over_odds", "under_odds", "saved_at"]
+MY_COLS = ["date", "sport", "player", "player_id", "stat", "line", "over_odds", "under_odds", "saved_at",
+           "removed"]
 _KEY = ["date", "sport", "player", "stat"]
 
 
@@ -425,7 +426,45 @@ def my_lines() -> pd.DataFrame:
     if not MY_LINES_CSV.exists():
         return pd.DataFrame(columns=MY_COLS)
     d = pd.read_csv(MY_LINES_CSV, parse_dates=["date", "saved_at"])
+    if "removed" not in d:
+        d["removed"] = False
+    d["removed"] = d["removed"].fillna(False).astype(bool)
     return d
+
+
+def _same(d: pd.DataFrame, r: dict) -> pd.Series:
+    return ((d["date"] == pd.Timestamp(r["date"]).normalize()) & (d["sport"] == r["sport"])
+            & (d["player"] == r["player"]) & (d["stat"] == r["stat"]))
+
+
+def remove_pick(r: dict) -> None:
+    """The prop isn't offered at your book: hide this pick from Top Picks and don't track it."""
+    from . import history
+    d = my_lines()
+    if not d.empty:
+        d = d[~_same(d, r)]
+    row = {"date": pd.Timestamp(r["date"]).normalize(), "sport": r["sport"], "player": r["player"],
+           "player_id": r.get("player_id"), "stat": r["stat"], "line": np.nan, "over_odds": np.nan,
+           "under_odds": np.nan, "saved_at": pd.Timestamp.now().floor("s"), "removed": True}
+    pd.concat([d, pd.DataFrame([row])], ignore_index=True).to_csv(MY_LINES_CSV, index=False)
+    if CACHE.exists():
+        c = pd.read_csv(CACHE, parse_dates=["date", "generated_at"])
+        c["date"] = c["date"].dt.normalize()
+        c[~_same(c, r)].to_csv(CACHE, index=False)
+    history.unlog_pick(r)
+
+
+def restore_pick(r: dict) -> None:
+    d = my_lines()
+    if not d.empty:
+        d[~(_same(d, r) & d["removed"])].to_csv(MY_LINES_CSV, index=False)
+
+
+def removed_picks() -> pd.DataFrame:
+    d = my_lines()
+    if d.empty:
+        return d
+    return d[d["removed"] & (d["date"] >= pd.Timestamp.today().normalize())]
 
 
 def _as_pick_row(new: dict) -> dict:
@@ -448,9 +487,9 @@ def save_my_line(new: dict) -> None:
            "player_id": new.get("player_id"), "stat": new["stat"], "line": float(new["line"]),
            "over_odds": new.get("over_odds"), "under_odds": new.get("under_odds"),
            "saved_at": pd.Timestamp.now().floor("s")}
+    row["removed"] = False
     if not d.empty:
-        d = d[~((d["date"] == row["date"]) & (d["sport"] == row["sport"]) & (d["player"] == row["player"])
-                & (d["stat"] == row["stat"]))]
+        d = d[~_same(d, row)]
     d = pd.concat([d, pd.DataFrame([row])], ignore_index=True)
     d.to_csv(MY_LINES_CSV, index=False)
     pick = _as_pick_row(new)
@@ -482,6 +521,11 @@ def apply_my_lines(df: pd.DataFrame, log=print) -> pd.DataFrame:
     mine = mine[mine["date"] >= pd.Timestamp.today().normalize()]
     df = df.copy()
     df["_d"] = pd.to_datetime(df["date"]).dt.normalize()
+    gone = mine[mine["removed"]]
+    for m in gone.itertuples():                         # props not offered at your book
+        df = df[~((df["_d"] == m.date) & (df["sport"] == m.sport) & (df["player"] == m.player)
+                  & (df["stat"] == m.stat))]
+    mine = mine[~mine["removed"]]
     leagues = {}
     for m in mine.itertuples():
         hit = df.index[(df["_d"] == m.date) & (df["sport"] == m.sport) & (df["player"] == m.player)

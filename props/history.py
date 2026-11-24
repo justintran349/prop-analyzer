@@ -51,6 +51,15 @@ def log_picks(picks: pd.DataFrame) -> int:
     p["odds"] = np.where(p["pick"] == "OVER", p.get("over_odds"), p.get("under_odds"))
     p["source"] = "live"
     p = _blank(p)
+    try:                                   # skip picks you removed (prop not offered)
+        from .top_picks import removed_picks
+        gone = removed_picks()
+        if not gone.empty:
+            k = gone[["date", "sport", "player", "stat"]].assign(_gone=True)
+            p = p.merge(k, on=["date", "sport", "player", "stat"], how="left")
+            p = _blank(p[p["_gone"].isna()].drop(columns="_gone"))
+    except Exception:
+        pass
     old = _read(HISTORY_CSV)
     key = ["date", "sport", "player_id", "stat"]
     graded = old[old["result"].isin(["win", "loss", "push", "void"])]
@@ -60,6 +69,17 @@ def log_picks(picks: pd.DataFrame) -> int:
                                                                   ascending=[True, True, False])
     out.to_csv(HISTORY_CSV, index=False)
     return len(p)
+
+
+def unlog_pick(r: dict) -> None:
+    """Stop tracking a pick (e.g. the prop wasn't offered). Graded picks are kept."""
+    d = _read(HISTORY_CSV)
+    if d.empty:
+        return
+    m = ((d["date"] == pd.Timestamp(r["date"]).normalize()) & (d["sport"] == r["sport"])
+         & (d["player"] == r["player"]) & (d["stat"] == r["stat"])
+         & ~d["result"].isin(["win", "loss", "push", "void"]))
+    d[~m].to_csv(HISTORY_CSV, index=False)
 
 
 # ------------------------------------------------------------------ grading
