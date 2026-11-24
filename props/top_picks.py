@@ -112,7 +112,7 @@ def build_nba(stats=None, log=print) -> pd.DataFrame:
     out["injury_note"] = [onoff.explain(i, config.STATS.get(st_, st_), pl, pb, pa)
                           if isinstance(i, dict) else ""
                           for i, st_, pl, pb, pa in zip(oo, out["stat"], out["player"], pm, out["prob_over"])]
-    out["injury_short"] = [f"Without {' & '.join(n.split()[-1] for n in i['names'])}: "
+    out["injury_short"] = [f"Without {' & '.join(onoff.last_name(n) for n in i['names'])}: "
                            f"{i['without']['min']:.0f} min vs {i['with']['min']:.0f} "
                            f"({i['without']['n']} games)" if isinstance(i, dict) else ""
                            for i in oo]
@@ -236,6 +236,7 @@ def build(log=print) -> pd.DataFrame:
             log(f"{name} skipped: {e}")
             traceback.print_exc()
     df = finalize(pd.concat(frames, ignore_index=True)) if frames else pd.DataFrame()
+    df = apply_my_lines(df, log=log)
     if not df.empty:
         df["generated_at"] = pd.Timestamp.now().floor("min")
         df.to_csv(CACHE, index=False)
@@ -411,3 +412,98 @@ def rescore_pick(sport: str, league, r: dict, line: float, over_odds=None, under
     new["confidence"] = p if p >= 0.5 else 1 - p
     new["tested_hit"] = tested_hit_rate(sport, r["stat"], p, new["pick"])
     return new, row
+
+
+# --------------------------------------------------- your own lines (tracked)
+MY_LINES_CSV = config.DATA_DIR / "my_lines.csv"
+MY_COLS = ["date", "sport", "player", "player_id", "stat", "line", "over_odds", "under_odds", "saved_at"]
+_KEY = ["date", "sport", "player", "stat"]
+
+
+def my_lines() -> pd.DataFrame:
+    if not MY_LINES_CSV.exists():
+        return pd.DataFrame(columns=MY_COLS)
+    d = pd.read_csv(MY_LINES_CSV, parse_dates=["date", "saved_at"])
+    return d
+
+
+def _as_pick_row(new: dict) -> dict:
+    new = dict(new)
+    new.update({"line_type": "mine", "book": "My line", "edge": np.nan, "injury_note": None})
+    o = new.get("over_odds") if new["pick"] == "OVER" else new.get("under_odds")
+    if o is not None and pd.notna(o):
+        new["edge"] = new["edge_over"] if new["pick"] == "OVER" else new["edge_under"]
+    new["reason"] = f"Your line {new['line']:g}" + (f" ({int(o):+d})" if o is not None and pd.notna(o) else "") \
+        + " · " + str(new.get("reason") or "").split(" · ", 1)[-1]
+    return new
+
+
+def save_my_line(new: dict) -> None:
+    """Keep the line you entered: Top Picks uses it until the game, and the Results page
+    grades the pick at your line and odds."""
+    from . import history
+    d = my_lines()
+    row = {"date": pd.Timestamp(new["date"]).normalize(), "sport": new["sport"], "player": new["player"],
+           "player_id": new.get("player_id"), "stat": new["stat"], "line": float(new["line"]),
+           "over_odds": new.get("over_odds"), "under_odds": new.get("under_odds"),
+           "saved_at": pd.Timestamp.now().floor("s")}
+    if not d.empty:
+        d = d[~((d["date"] == row["date"]) & (d["sport"] == row["sport"]) & (d["player"] == row["player"])
+                & (d["stat"] == row["stat"]))]
+    d = pd.concat([d, pd.DataFrame([row])], ignore_index=True)
+    d.to_csv(MY_LINES_CSV, index=False)
+    pick = _as_pick_row(new)
+    if CACHE.exists():                          # update the cached slate right away
+        c = pd.read_csv(CACHE, parse_dates=["date", "generated_at"])
+        m = ((c["date"].dt.normalize() == row["date"]) & (c["sport"] == row["sport"])
+             & (c["player"] == row["player"]) & (c["stat"] == row["stat"]))
+        for k, v in pick.items():
+            if k in c.columns and m.any():
+                c.loc[m, k] = v
+        c.to_csv(CACHE, index=False)
+    history.log_picks(pd.DataFrame([pick]))
+
+
+def clear_my_line(r: dict) -> None:
+    d = my_lines()
+    if d.empty:
+        return
+    d = d[~((d["date"] == pd.Timestamp(r["date"]).normalize()) & (d["sport"] == r["sport"])
+            & (d["player"] == r["player"]) & (d["stat"] == r["stat"]))]
+    d.to_csv(MY_LINES_CSV, index=False)
+
+
+def apply_my_lines(df: pd.DataFrame, log=print) -> pd.DataFrame:
+    """Re-score picks you set a line for (rebuilds don't overwrite your lines)."""
+    mine = my_lines()
+    if df.empty or mine.empty:
+        return df
+    mine = mine[mine["date"] >= pd.Timestamp.today().normalize()]
+    df = df.copy()
+    df["_d"] = pd.to_datetime(df["date"]).dt.normalize()
+    leagues = {}
+    for m in mine.itertuples():
+        hit = df.index[(df["_d"] == m.date) & (df["sport"] == m.sport) & (df["player"] == m.player)
+                       & (df["stat"] == m.stat)]
+        if not len(hit):
+            continue
+        r = df.loc[hit[0]].drop("_d").to_dict()
+        try:
+            if m.sport not in leagues:
+                if m.sport == "NBA":
+                    from .slate import League
+                    leagues[m.sport] = League()
+                else:
+                    from .nfl_slate import NFLLeague
+                    leagues[m.sport] = NFLLeague()
+            oo = None if pd.isna(m.over_odds) else int(m.over_odds)
+            uo = None if pd.isna(m.under_odds) else int(m.under_odds)
+            new, _ = rescore_pick(m.sport, leagues[m.sport], {**r, "line": r["line"]}, float(m.line), oo, uo)
+            if new is None:
+                continue
+            for k, v in _as_pick_row(new).items():
+                if k in df.columns:
+                    df.at[hit[0], k] = v
+        except Exception as e:
+            log(f"Couldn't apply your line for {m.player} {m.stat}: {e}")
+    return df.drop(columns="_d")

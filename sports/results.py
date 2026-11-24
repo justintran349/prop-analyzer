@@ -45,7 +45,13 @@ with st.container(border=True):
     conf = c[3].slider("Min confidence", 0.50, 0.80, 0.60, 0.01, format="%.2f", key="res_conf")
     top_n = c[4].selectbox("Picks per day", ["Top 10", "Top 5", "Top 20", "All"], key="res_top")
 
+LINE_SETS = {"All lines": None, "Real lines only (book + mine)": ["sportsbook", "mine"],
+             "My lines only": ["mine"]}
+line_set = st.radio("Lines", list(LINE_SETS), horizontal=True, key="res_lines",
+                    help="'Mine' = lines you entered with 'Use as my line' in a pick's Why window.")
 df = df_all[df_all["source"].isin(src) & df_all["sport"].isin(sport) & (df_all["confidence"].fillna(1) >= conf)]
+if LINE_SETS[line_set]:
+    df = df[df["line_type"].isin(LINE_SETS[line_set]) | (df["source"] == "tracked")]
 if stat_f:
     df = df[df["stat_label"].isin(stat_f)]
 n = None if top_n == "All" else int(top_n.split()[1])

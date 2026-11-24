@@ -148,11 +148,16 @@ def apply(lg, scored: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def last_name(name: str) -> str:
+    parts = [p for p in str(name).split() if p.rstrip(".").lower() not in {"jr", "sr", "ii", "iii", "iv"}]
+    return parts[-1] if parts else str(name)
+
+
 def explain(info: dict, stat_label: str, player: str, p_before, p_after) -> str:
     """Plain-English version of the with/without math."""
     a, b, w = info["with"], info["without"], info["weight"]
     who = " and ".join(info["names"])
-    last = player.split()[-1]
+    last = last_name(player)
     lab = stat_label.lower()
     usg = (f", used {b['usg']:.0%} of the team's possessions while on the floor (vs {a['usg']:.0%})"
            if pd.notna(a["usg"]) and pd.notna(b["usg"]) else "")
@@ -167,7 +172,7 @@ def explain(info: dict, stat_label: str, player: str, p_before, p_after) -> str:
             f"vs {a['per_game']:.1f} with. {b['n']} game(s) is a small sample, so it counts "
             f"{w:.0%} ({b['n']} / ({b['n']} + {PRIOR_GAMES})). Starting from his last 10 games "
             f"({info['recent_min']:.1f} min, {info['recent_rate']:.2f}/min) and moving {w:.0%} of the way to "
-            f"his without-{info['names'][0].split()[-1]} numbers: {info['min_t']:.1f} min × "
+            f"his without-{last_name(info['names'][0])} numbers: {info['min_t']:.1f} min × "
             f"{info['rate_t']:.2f}/min = {info['min_t'] * info['rate_t']:.1f} {lab}, which is **×{info['boost']:.2f}** "
             f"his recent form.{already} Applying ×{info['boost']:.2f} to that: {info['model_proj']:.1f} × "
             f"{info['boost']:.2f} = **{info['target']:.1f}**. The difference, "

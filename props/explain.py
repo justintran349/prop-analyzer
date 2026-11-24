@@ -273,9 +273,9 @@ def breakdown(sport: str, r: dict, row: pd.Series | None) -> tuple[list[str], pd
         steps.append(f"**Reality check.** When the model gave about this confidence on {lab.lower()} in testing "
                      f"(games it had never seen), that side won {th:.0%} of the time.")
     odds_col = "over_odds" if over else "under_odds"
-    american = r.get(odds_col) if r.get("line_type") in ("sportsbook", "custom") else None
+    american = r.get(odds_col) if r.get("line_type") in ("sportsbook", "custom", "mine") else None
     steps.append("**Is it worth betting?** " + odds_math(conf, american))
-    if r.get("line_type") == "custom":
+    if r.get("line_type") in ("custom", "mine"):
         steps.append(f"*You set this line to {line:g} by hand. Everything above was recalculated for it.*")
     elif r.get("line_type") != "sportsbook":
         steps.append("*This uses an estimated line (his recent average rounded to x.5). If the real line is "

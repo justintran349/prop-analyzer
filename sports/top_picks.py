@@ -94,6 +94,19 @@ def show_hit_rates(r: dict):
                       else ""))
         if r["pick"] != orig["pick"]:
             st.warning(f"At {new_line:g} the pick flips to **{r['pick']}**.")
+        if st.button(f"💾 Use {new_line:g} as my line and track it", type="primary", key=f"save|{base_key}",
+                     help="Top Picks keeps this line (and odds) for this game, even when it refreshes, and "
+                          "the Results page grades the pick at your line."):
+            tp.save_my_line({**r, "sport": orig["sport"], "date": orig["date"]})
+            st.success(f"Saved: {r['player']} {r['pick']} {new_line:g} {r['stat_label']}. It's now tracked "
+                       "on the Results page.")
+            st.rerun()
+    elif orig.get("line_type") == "mine":
+        st.info(f"✏️ **This is your line ({orig['line']:g}).** It's tracked at this line on the Results page.")
+        if st.button("Remove my line (go back to the book / estimated line)", key=f"clear|{base_key}"):
+            tp.clear_my_line(orig)
+            rebuild()
+            st.rerun()
     side = "⬆️ OVER" if r["pick"] == "OVER" else "⬇️ UNDER"
     st.markdown(f"### {r['player']} · {side} {r['line']:g} {r['stat_label']}")
     st.caption(f"{r['team']} {r['game']} · model confidence {r['confidence']:.0%}"
@@ -323,7 +336,7 @@ def picks_view():
     if stats:
         v = v[v["stat_label"].isin(stats)]
     if books_only:
-        v = v[v["line_type"] == "sportsbook"]
+        v = v[v["line_type"].isin(["sportsbook", "mine"])]
 
     if (v["line_type"] == "estimated").any():
         st.caption("**Estimated line** = the player's recent average rounded to x.5, used when there's no "
@@ -349,7 +362,9 @@ def picks_view():
                 c1.metric("Confidence", f"{r.confidence:.0%}")
                 c2.metric("Tested hit rate", f"{r.tested_hit:.0%}" if pd.notna(r.tested_hit) else "—")
                 badge = (f"📗 {r.book} line" + (f" · edge {r.edge:+.0%}" if pd.notna(r.edge) else "")
-                         if r.line_type == "sportsbook" else "📝 estimated line")
+                         if r.line_type == "sportsbook" else
+                         "✏️ your line" + (f" · edge {r.edge:+.0%}" if pd.notna(r.edge) else "")
+                         if r.line_type == "mine" else "📝 estimated line")
                 avg = f" · season avg {r.avg_season:.1f}" if pd.notna(r.avg_season) else ""
                 st.caption(f"{badge}{avg}")
                 if isinstance(r.notes, str) and r.notes.strip(" ·"):
